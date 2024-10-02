@@ -149,3 +149,95 @@ docker-exec:
 docker-clean: docker-stop
 	-@docker container prune --force
 	-@docker image prune --all --force
+
+##
+## Publish targets
+##
+
+HUB_REGISTRY_NAME=${PROJECT_NAME}
+HUB_REGISTRY_USER=okertanov
+HUB_REGISTRY_TOKEN=5bd37ac1-045d-4923-8c94-b0f9fbfbe19b
+
+docker-publish: docker-publish-node
+	make -C modules/nxa-open-api $@
+	make -C modules/nxa-sc-caas $@
+	make -C modules/polaris-portal $@
+
+docker-publish-node: docker-build
+	@echo ${HUB_REGISTRY_TOKEN} | docker login --username ${HUB_REGISTRY_USER} --password-stdin
+	docker tag ${PROJECT_NAME}:latest ${HUB_REGISTRY_USER}/${HUB_REGISTRY_NAME}:latest
+	docker push ${HUB_REGISTRY_USER}/${HUB_REGISTRY_NAME}:latest
+
+##
+## Deployment targets
+##
+
+deploy-public: SSH?=team11@neo-testnet-public.lan
+deploy-public: docker-compose.gcp.testnet-public.yml
+	ssh ${SSH} mkdir -p ./deployment/${PROJECT_NAME}/config/testnet
+	scp Makefile ${SSH}:./deployment/${PROJECT_NAME}/
+	scp .env ${SSH}:./deployment/${PROJECT_NAME}/
+	scp $< ${SSH}:./deployment/${PROJECT_NAME}/
+	scp -pr config/testnet/public ${SSH}:./deployment/${PROJECT_NAME}/config/testnet/
+	scp -pr config/caas ${SSH}:./deployment/${PROJECT_NAME}/config/
+	ssh ${SSH} \
+		"cd ./deployment/${PROJECT_NAME}/ && \
+			docker-compose -f $< down --remove-orphans"
+	ssh ${SSH} \
+		"cd ./deployment/${PROJECT_NAME}/ && \
+			docker-compose -f $< pull"
+	ssh ${SSH} \
+		"cd ./deployment/${PROJECT_NAME}/ && \
+			docker-compose -f $< up -d"
+	ssh ${SSH} docker ps
+
+##
+## Cleanups targets
+##
+
+clean:
+	-@make -C modules/neo-vm clean
+	-@make -C modules/neo clean
+	-@make -C modules/neo-modules clean
+	-@make -C modules/neo-node clean
+	-@make -C modules/neo-devpack-dotnet clean
+	-@make -C modules/nxa-modules clean
+	-@make -C modules/nxa-sc-caas clean
+	-@make -C modules/nxa-open-api clean
+	-@make -C modules/polaris-portal clean
+
+distclean: clean
+
+##
+## Utility targets
+##
+
+define Util_git_status
+	echo "Updating: $(1)";
+	cd $(1) && git pull --progress && git push --quiet && git status --short;
+endef
+
+git-status:
+	@$(foreach module,$(NEO_MODULES),$(call Util_git_status,$(module)))
+	@$(foreach module,$(NXA_MODULES),$(call Util_git_status,$(module)))
+
+##
+## Internal targets
+##
+
+.PHONY: all bootstrap clone build clean distclean \
+	docker-build docker-rebuild \
+	docker-start docker-stop docker-exec \
+	docker-start-all docker-stop-all \
+	docker-clean docker-publish deploy-public \
+	build-modules-neo-vm \
+	build-modules-neo \
+	build-modules-neo-modules \
+	build-modules-neo-node \
+	build-modules-neo-devpack-dotnet \
+	build-modules-nxa-modules \
+	build-modules-nxa-sc-caas \
+	build-modules-nxa-open-api \
+	build-modules-polaris-portal
+
+.SILENT: clean distclean
