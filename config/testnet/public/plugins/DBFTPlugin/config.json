@@ -1,0 +1,10 @@
+{
+    "PluginConfiguration": {
+      "Network": 877933390,
+      "RecoveryLogs": "/neo-node-data/ConsensusState",
+      "IgnoreRecoveryLogs": false,
+      "AutoStart": false,
+      "MaxBlockSize": 2097152,
+      "MaxBlockSystemFee": 150000000000
+    }
+}
